@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <!-- ビューポート設定 -->
+    <title>掲示板</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+
+        #postForm {
+            display: flex;
+            flex-direction: column; /* 縦並びに変更 */
+            align-items: center; /* 中央揃え */
+            margin-bottom: 20px;
+        }
+
+        input[type="text"] {
+            width: 100%; /* 幅を100%に設定 */
+            max-width: 400px; /* 最大幅を設定 */
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            margin-bottom: 10px; /* 下にスペース */
+        }
+
+        button {
+            padding: 10px 15px;
+            background-color: #5cb85c;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #4cae4c;
+        }
+
+        .post {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .replyForm {
+            display: flex;
+            flex-direction: column; /* 縦並びに変更 */
+            margin-top: 10px;
+        }
+
+        .post button {
+            float: right;
+            background-color: #d9534f;
+        }
+
+        .post button:hover {
+            background-color: #c9302c;
+        }
+
+        /* モバイル対応のためのメディアクエリ */
+        @media (max-width: 600px) {
+            #postForm {
+                flex-direction: column; /* 縦並びに変更 */
+            }
+
+            input[type="text"] {
+                width: 100%; /* 幅を100%に設定 */
+            }
+
+            .post {
+                padding: 10px; /* パディングを小さく */
+            }
+
+            button {
+                width: 100%; /* ボタンを幅100%に */
+                margin-top: 5px; /* 上にスペース */
+            }
+
+            .replyForm {
+                flex-direction: column; /* 縦並びに変更 */
+            }
+        }
+    </style>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.1.3/firebase-auth.js"></script>
+</head>
+<body>
+    <h1>掲示板</h1>
+    <form id="postForm">
+        <input type="text" id="postInput" placeholder="メッセージを入力" required>
+        <button type="submit">投稿</button>
+    </form>
+    <div id="posts"></div>
+
+    <script>
+        // Firebaseの設定
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            databaseURL: "https://YOUR_PROJECT_ID.firebaseio.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        // Firebaseの初期化
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        const form = document.getElementById('postForm');
+        const postsDiv = document.getElementById('posts');
+
+        // 入力データのエスケープ処理
+        function escapeHTML(str) {
+            return str.replace(/&/g, "&amp;")
+                      .replace(/</g, "&lt;")
+                      .replace(/>/g, "&gt;")
+                      .replace(/"/g, "&quot;")
+                      .replace(/'/g, "&#039;");
+        }
+
+        // データベースからメッセージを取得
+        function fetchMessages() {
+            const messagesRef = database.ref('messages');
+            messagesRef.on('value', (snapshot) => {
+                const messages = snapshot.val();
+                displayMessages(messages);
+            });
+        }
+
+        // メッセージを表示する関数
+        function displayMessages(messages) {
+            postsDiv.innerHTML = '';
+            for (const key in messages) {
+                const msg = messages[key];
+                const postElement = document.createElement('div');
+                postElement.classList.add('post');
+                postElement.innerHTML = `<strong>${escapeHTML(msg.text)}</strong>`;
+
+                // 返信の表示
+                if (msg.replies) {
+                    for (const reply of msg.replies) {
+                        const replyElement = document.createElement('div');
+                        replyElement.innerHTML = `-- ${escapeHTML(reply)}`;
+                        postElement.appendChild(replyElement);
+                    }
+                }
+
+                // 削除ボタン
+                const deleteButton = document.createElement('button');
+                deleteButton.textContent = '削除';
+                deleteButton.onclick = () => deleteMessage(key);
+                postElement.appendChild(deleteButton);
+
+                // 返信フォーム
+                const replyForm = document.createElement('form');
+                replyForm.classList.add('replyForm');
+                const replyInput = document.createElement('input');
+                replyInput.type = 'text';
+                replyInput.placeholder = '返信を入力';
+                replyInput.required = true;
+
+                const replyButton = document.createElement('button');
+                replyButton.textContent = '返信';
+                replyButton.onclick = (event) => {
+                    event.preventDefault();
+                    addReply(key, replyInput.value);
+                    replyInput.value = '';
+                };
+
+                replyForm.appendChild(replyInput);
+                replyForm.appendChild(replyButton);
+                postElement.appendChild(replyForm);
+                postsDiv.appendChild(postElement);
+            }
+        }
+
+        // メッセージをFirebaseに保存
+        function saveMessage(message) {
+            const messagesRef = database.ref('messages');
+            messagesRef.push(message);
+        }
+
+        // メッセージを削除する関数
+        function deleteMessage(key) {
+            const messagesRef = database.ref('messages/' + key);
+            messagesRef.remove();
+        }
+
+        // 返信を追加する関数
+        function addReply(key, reply) {
+            const messagesRef = database.ref('messages/' + key + '/replies');
+            messagesRef.once('value').then((snapshot) => {
+                const replies = snapshot.val() || [];
+                replies.push(escapeHTML(reply));
+                messagesRef.set(replies);
+            });
+        }
+
+        form.addEventListener('submit', function(event) {
+            event.preventDefault();
+            const message = { text: escapeHTML(document.getElementById('postInput').value), replies: [] };
+            saveMessage(message);
+            form.reset();
+        });
+
+        // ページ読み込み時にメッセージを表示
+        window.onload = fetchMessages;
+    </script>
+</body>
+</html>
