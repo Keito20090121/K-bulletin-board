@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Kの掲示板</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        .post { margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+    <h1>掲示板</h1>
+    <form id="postForm">
+        <input type="text" id="postInput" placeholder="メッセージを入力" required>
+        <button type="submit">投稿</button>
+    </form>
+    <div id="posts"></div>
+
+    <script>
+        const form = document.getElementById('postForm');
+        const postsDiv = document.getElementById('posts');
+
+        form.addEventListener('submit', function(event) {
+            event.preventDefault();
+            const message = document.getElementById('postInput').value;
+            const postElement = document.createElement('div');
+            postElement.classList.add('post');
+            postElement.textContent = message;
+            postsDiv.appendChild(postElement);
+            form.reset();
+        });
+    </script>
+</body>
+</html>
